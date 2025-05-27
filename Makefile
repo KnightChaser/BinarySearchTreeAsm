@@ -1,27 +1,33 @@
-# Makefile for BinaryTreeAsm
 ASM      := nasm
 ASMFLAGS := -f elf64
 CC       := gcc
 CFLAGS   := -no-pie -fno-pie
 LDFLAGS  := -z noexecstack
-TARGET   := tree
+
+SRCDIR   := src
+OBJS     := create_node.o insert.o inorder.o main.o
 
 .PHONY: all clean
 
-all: $(TARGET)
+all: tree
 
-# assemble the ASM into an object
-tree.o: tree.asm
+# Assemble ASM modules
+$(SRCDIR)/create_node.o: $(SRCDIR)/create_node.asm $(SRCDIR)/structs.inc
 	$(ASM) $(ASMFLAGS) $< -o $@
 
-# compile the C into an object
+$(SRCDIR)/insert.o: $(SRCDIR)/insert.asm $(SRCDIR)/structs.inc
+	$(ASM) $(ASMFLAGS) $< -o $@
+
+$(SRCDIR)/inorder.o: $(SRCDIR)/inorder.asm $(SRCDIR)/structs.inc
+	$(ASM) $(ASMFLAGS) $< -o $@
+
+# Compile C module
 main.o: main.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# link both into the final binary
-$(TARGET): tree.o main.o
-	$(CC) $(CFLAGS) main.o tree.o -o $(TARGET) $(LDFLAGS)
+# Link all into executable
+tree: $(SRCDIR)/create_node.o $(SRCDIR)/insert.o $(SRCDIR)/inorder.o main.o
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 clean:
-	rm -f *.o $(TARGET)
-
+	rm -f $(SRCDIR)/*.o *.o tree
