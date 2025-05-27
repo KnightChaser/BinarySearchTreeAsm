@@ -1,155 +1,169 @@
-; tree.asm
+;tree.asm
 
 ;------------------------------------------------------------------------------
-; Tree data structure in x86-64 assembly
-; This file implements a binary tree with functions to create nodes,
-; insert values, and perform inorder traversal.
-; ------------------------------------------------------------------------------
+; Binary Tree in x86-64 Assembly (System V AMD64 ABI)
+; ——————————————————————————————————————————————————————————————————————————————
+; Provides:
+;   - create_node(value)  -> malloc’d Node*
+;   - insert(root, value) -> updated tree
+;   - inorder(root)       -> prints values in sorted order
+;
+; Layout:
+;   Node struct: 3 × 8 bytes = 24 bytes
+;     +0  data  (int64)
+;     +8  left  (Node*)
+;    +16  right (Node*)
+;------------------------------------------------------------------------------
+
+;------------------------------------------------------------------------------
+; Struct Definition & Constants
+;------------------------------------------------------------------------------
 struc Node
-    .data   resq 1
-    .left   resq 1
-    .right  resq 1
+    .data   resq 1            ; 8 B: value field
+    .left   resq 1            ; 8 B: ptr to left child
+    .right  resq 1            ; 8 B: ptr to right child
 endstruc
 
 %define NODE_DATA   Node.data
 %define NODE_LEFT   Node.left
 %define NODE_RIGHT  Node.right
-%define NODE_SIZE   24           ; 3 * 8 bytes for data, left, right pointers
+%define NODE_SIZE   24       ; total struct size
 
-;------------------------------------------------------------------------------ 
-; Imports & exports 
-;------------------------------------------------------------------------------ 
-extern malloc
-extern printf
-extern exit
+;------------------------------------------------------------------------------
+; External Symbols & Exports
+;------------------------------------------------------------------------------
+extern malloc                ; allocate memory
+extern printf                ; formatted print
+extern exit                  ; terminate process
 
 global create_node
-global inorder
 global insert
+global inorder
 
+;------------------------------------------------------------------------------
+; Text Section: Code
+;------------------------------------------------------------------------------
 section .text
 
-; create_node()
-;  - argument: rdi = value
-;  - returns:  rax = pointer to new Node
+;------------------------------------------------------------------------------
+; create_node(value)
+;  — Allocates a Node, sets its fields.
+; Args:
+;   RDI = 64-bit signed value
+; Returns:
+;   RAX = pointer to new Node (or does exit(1) on OOM)
+;------------------------------------------------------------------------------
 create_node:
-    ; prologue
-    push rbp
-    mov rbp, rsp
+    push    rbp
+    mov     rbp, rsp
+    mov     rbx, rdi              ; save value
 
-    ; save the incoming value
-    mov rbx, rdi     ; rbx <- value
+    mov     rdi, NODE_SIZE        ; malloc argument
+    call    malloc                ; RAX = ptr or NULL
+    test    rax, rax
+    je      .alloc_fail
 
-    ; request 24 bytes
-    mov rdi, NODE_SIZE
-    call malloc      ; rax <- ptr or 0 (failure)
+    ; initialize fields
+    mov     [rax + NODE_DATA], rbx
+    mov     qword [rax + NODE_LEFT],  0
+    mov     qword [rax + NODE_RIGHT], 0
 
-    test rax, rax
-    je .alloc_fail
-
-    ; initialize struct fields
-    mov [rax + NODE_DATA], rbx        ; set value
-    mov qword [rax + NODE_LEFT], 0    ; set left pointer to NULL
-    mov qword [rax + NODE_RIGHT], 0   ; set right pointer to NULL
-
-    ; epilogue
-    mov rsp, rbp
-    pop rbp
+    pop     rbp
     ret
 
 .alloc_fail:
-    ; Just exit(1)
-    mov edi, 1
-    call exit
+    mov     edi, 1
+    call    exit
 
-; inorder(Node* root)
-; - argument: rdi = pointer to root Node
-; - prints the values in inorder traversal
-inorder:
-    ; prologue
-    push rbp
-    mov rbp, rsp
-    push rbx      ; Use RBX to save the current node pointer
-
-    mov rbx, rdi; ; rbx <- root Node pointer
-    cmp rbx, 0
-    je .done      ; If root is NULL, return
-
-    ; Traverse left subtree (root->left)
-    mov rdi, [rbx + NODE_LEFT] ; rdi <- left child pointer
-    call inorder
-
-    ; print this node's data
-    mov rsi, [rbx + NODE_DATA] ; 2nd argument = node data
-    lea rdi, [rel fmt]         ; 1st argument = format string
-    xor eax, eax               ; Clear EAX for printf
-    call printf
-
-    ; traverse right subtree (root->right)
-    mov rdi, [rbx + NODE_RIGHT] ; rdi <- right child pointer
-    call inorder
-
-.done:
-    ; epilogue
-    ; it happens when we return from the last call
-    pop rbx
-    mov rsp, rbp
-    pop rbp
-    ret
-
-; insert(Node* root, int value)
-; - arguments:
-;    rdi = pointer to root Node
-;    rsi = value to insert
-; - returns: rax = pointer to the root Node (unchanged)
+;------------------------------------------------------------------------------
+; insert(root, value)
+;  — Standard BST insert, duplicates go right.
+; Args:
+;   RDI = Node* root
+;   RSI = int64 value
+; Returns:
+;   RAX = root pointer (unchanged) or new node if root was NULL
+;------------------------------------------------------------------------------
 insert:
-    ; prologue
-    push rbp
-    mov rbp, rsp
-    push rbx
-    push r12
+    push    rbp
+    mov     rbp, rsp
+    push    rbx
+    push    r12
 
-    mov rbx, rdi    ; rbx <- root Node pointer
-    mov r12, rsi    ; r12 <- value to insert
+    mov     rbx, rdi             ; current root
+    mov     r12, rsi             ; value to insert
+    cmp     rbx, 0
+    je      .mk_node             ; empty → new Node
 
-    cmp rbx, 0
-    je .make_node   ; if root is NULL, create a new node
+    mov     rcx, [rbx + NODE_DATA]
+    cmp     r12, rcx
+    jl      .go_left
 
-    ; compare value < root->data?
-    mov rcx, [rbx + NODE_DATA]
-    cmp r12, rcx
-    jl  .do_left
-    ; else -> do_right
-.do_right:
-    mov rdi, [rbx + NODE_RIGHT]  ; arg1 = root->right
-    mov rsi, r12                 ; arg2 = value to insert
-    call insert
-    mov [rbx + NODE_RIGHT], rax  ; update right child pointer
-    jmp .return_root
+.go_right:
+    mov     rdi, [rbx + NODE_RIGHT]
+    mov     rsi, r12
+    call    insert
+    mov     [rbx + NODE_RIGHT], rax
+    jmp     .ret
 
-.do_left:
-    mov rdi, [rbx + NODE_LEFT]   ; arg1 = root->left
-    mov rsi, r12                 ; arg2 = value to insert
-    call insert
-    mov [rbx + NODE_LEFT], rax   ; update left child pointer
+.go_left:
+    mov     rdi, [rbx + NODE_LEFT]
+    mov     rsi, r12
+    call    insert
+    mov     [rbx + NODE_LEFT], rax
 
-.return_root:
-    mov rax, rbx   ; return the unchanged root pointer
-    jmp .cleanup
+.ret:
+    mov     rax, rbx              ; return original root
+    jmp     .cleanup
 
-.make_node:
-    ; create a new node
-    mov rdi, r12   ; rdi <- value to insert
-    call create_node
-    jmp .cleanup
+.mk_node:
+    mov     rdi, r12
+    call    create_node           ; RAX = new node
+    jmp     .cleanup
 
 .cleanup:
-    ; epilogue
-    pop r12
-    pop rbx
-    mov rsp, rbp
-    pop rbp
+    pop     r12
+    pop     rbx
+    pop     rbp
     ret
 
+;------------------------------------------------------------------------------
+; inorder(root)
+;  — Recursively prints all values in sorted order.
+; Args:
+;   RDI = Node* root
+;------------------------------------------------------------------------------
+inorder:
+    push    rbp
+    mov     rbp, rsp
+    push    rbx
+
+    mov     rbx, rdi
+    cmp     rbx, 0
+    je      .done
+
+    ; left subtree
+    mov     rdi, [rbx + NODE_LEFT]
+    call    inorder
+
+    ; print this node
+    mov     rsi, [rbx + NODE_DATA]
+    lea     rdi, [rel fmt]        ; address of "%d "
+    xor     eax, eax              ; clear for variadic ABI
+    call    printf
+
+    ; right subtree
+    mov     rdi, [rbx + NODE_RIGHT]
+    call    inorder
+
+.done:
+    pop     rbx
+    pop     rbp
+    ret
+
+;------------------------------------------------------------------------------
+; Read-Only Data
+;------------------------------------------------------------------------------
 section .rodata
-fmt:  db "%d ", 0  ; format string for printf
+fmt:    db "%d ", 0
+
