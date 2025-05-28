@@ -93,6 +93,7 @@ delete:
     call delete                 ; delete from right subtree
     mov [rbx + NODE_RIGHT], rax ; update right child
     mov rax, rbx                ; return current node as new root
+    jmp .cleanup
 
 .ret_null:
     ; return NULL
