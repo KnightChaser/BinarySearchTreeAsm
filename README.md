@@ -14,9 +14,9 @@ Project overlook:
 - `main.c`: Interactive shell for `insert`, `delete`, `print` commands. (Since this is not directly relatd to BST data structure, I implemented such interactions in C rather than Assembly for convenience.) 
 
 ### Usage
-Build: `make`
-Run: `./tree`
-Commands: `insert <key>`, `delete <key>`, `print`, `help` and `exit`.
+- Build: `make`
+- Run: `./tree`
+- Commands: `insert <key>`, `delete <key>`, `print`, `help` and `exit`.
 
 ### Licenses and contributions
 This is an open source. Any contributions or comments are welcomed!
