@@ -72,6 +72,10 @@ int main(int argc, char *argv[]) {
             printf("bye! >_<\n");
             break;
 
+        } else if (strcmp(line, "help") == 0) {
+            // print the help message
+            help();
+
         } else if (line[0] != '\0') {
             printf("unknown command: '%s'\n", line);
         }
